@@ -45,37 +45,63 @@ jobs:
   sast:
     name: 🔒 SAST - Semgrep
     runs-on: ubuntu-latest   # ⚡ Remplacez par self-hosted si besoin
-    needs: test             # Dépend du job test
+    needs: test
     steps:
       - name: 📥 Récupérer le code
         uses: actions/checkout@v4
 
-      - name: 🔍 Scan Semgrep
-        id: semgrep
+      # Étape 1 : Scan avec l'action officielle (affichage immédiat)
+      - name: 🔍 Scan Semgrep (action)
         uses: returntocorp/semgrep-action@v1
-        continue-on-error: true   # Ne bloque pas le pipeline
+        continue-on-error: true
         with:
           config: .semgrep.yml
-          json: true
-          output: semgrep-results.json
+          # Pas de json/output ici ; l'action affiche les résultats dans la console
 
-      - name: 📊 Afficher le résumé
+      # Étape 2 : Installation de Semgrep (pour générer le rapport JSON)
+      - name: 📦 Installer Semgrep
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep
+
+      # Étape 3 : Générer le rapport JSON complet
+      - name: 📊 Générer le rapport JSON
+        run: |
+          semgrep --config .semgrep.yml --json --output semgrep-results.json
+        continue-on-error: true
+
+      # Étape 4 : Analyser le rapport (compter les vulnérabilités)
+      - name: 📈 Analyser les résultats
         run: |
           echo "=== RÉSULTATS SAST ==="
-          echo "🔍 Scan terminé"
-          echo "📁 Fichier de règles : .semgrep.yml"
           if [ -f semgrep-results.json ]; then
             COUNT=$(jq '.results | length' semgrep-results.json)
-            echo "⚠️  $COUNT vulnérabilité(s) trouvée(s)"
+            echo "🔍 $COUNT vulnérabilité(s) trouvée(s)"
+            jq '.results[] | "⚠️  [\(.extra.severity)] \(.check_id) - \(.path):\(.start.line)"' semgrep-results.json
           else
-            echo "✅ Aucune vulnérabilité détectée"
+            echo "✅ Aucun résultat (fichier JSON non généré)"
           fi
 
+      # Étape 5 : Upload du rapport JSON (optionnel mais recommandé)
       - name: 📤 Upload des résultats Semgrep
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-results
           path: semgrep-results.json
+
+      # Étape 6 : (Optionnel) Importer dans DefectDojo si runner auto-hébergé
+      # - name: 📤 Importer dans DefectDojo
+      #   if: runner.name == 'self-hosted'  # ou utilisez toujours si l'URL est accessible
+      #   env:
+      #     DD_URL: http://localhost:8080   # pour self-hosted
+      #     DD_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
+      #   run: |
+      #     curl -X POST "$DD_URL/api/v2/import-scan/" \
+      #       -H "Authorization: Token $DD_API_KEY" \
+      #       -F "engagement=1" \
+      #       -F "scan_type=Semgrep JSON Report" \
+      #       -F "file=@semgrep-results.json" \
+      #       -F "close_old_findings=true"
 
   # Job 3 : Conclusion (optionnel)
   conclusion:
@@ -84,4 +110,5 @@ jobs:
     needs: [test, sast]
     if: always()
     steps:
-      - run: echo "✅ CI + SAST exécuté avec succès !"
+      - name: ✅ Finalisation
+        run: echo "✅ CI + SAST exécuté avec succès !"
