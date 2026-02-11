@@ -10,7 +10,7 @@ jobs:
   # Job 1 : Tests unitaires et intégration
   test:
     name: 🧪 Tests API
-    runs-on: ubuntu-latest   # ⚡ Remplacez par self-hosted si vous utilisez votre VM
+    runs-on: self-hosted   # ⚡ Remplacez par self-hosted si vous utilisez votre VM
     steps:
       - name: 📥 Récupérer le code
         uses: actions/checkout@v4
