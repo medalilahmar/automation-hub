@@ -22,7 +22,7 @@ jobs:
         config: .semgrep.yml
 
     - name: 📦 Installer Semgrep CLI
-      run: pip install semgrep
+      run: pip3 install semgrep
 
     - name: 📊 Générer rapport JSON
       run: semgrep --config .semgrep.yml --json --output semgrep-results.json
