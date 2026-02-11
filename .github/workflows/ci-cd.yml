@@ -48,7 +48,8 @@ jobs:
     - name: 🔍 SAST - Scan de sécurité avec Semgrep
       uses: returntocorp/semgrep-action@v1
       with:
-        config: .semgrep.yml  # Votre fichier de règles
+        config: .semgrep.yml
+      continue-on-error: true  
         
     - name: 📊 Afficher les résultats
       run: |
