@@ -1,63 +1,87 @@
-name: 🧪 Premier Workflow Simple + SAST
+name: 🚀 CI + SAST (Semgrep)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  hello-world:
-    runs-on: ubuntu-latest
-    
+  # Job 1 : Tests unitaires et intégration
+  test:
+    name: 🧪 Tests API
+    runs-on: ubuntu-latest   # ⚡ Remplacez par self-hosted si vous utilisez votre VM
     steps:
-    # ---------- VOS ÉTAPES EXISTANTES ----------
-    - name: 📥 Récupérer le code
-      uses: actions/checkout@v4
-      
-    - name: 👋 Bonjour GitHub Actions
-      run: echo "Mon premier workflow GitHub Actions !"
-      
-    - name: 🖥️ Infos système
-      run: |
-        echo "Date: $(date)"
-        echo "Système: $(uname -a)"
-        echo "Répertoire: $(pwd)"
-        echo "Fichiers:"
-        ls -la
-        
-    - name: ⚙️ Tester Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        
-    - name: 📦 Vérifier installation
-      run: |
-        echo "Node version: $(node --version)"
-        echo "npm version: $(npm --version)"
-        
-    - name: 🚀 Tester mon API
-      run: |
-        echo "Installation des dépendances..."
-        npm ci
-        echo "Lancement des tests..."
-        npm test
-        echo "✅ Tests réussis !"
-    
-    # ---------- NOUVELLE ÉTAPE : SAST Semgrep ----------
-    - name: 🔍 SAST - Scan de sécurité avec Semgrep
-      uses: returntocorp/semgrep-action@v1
-      with:
-        config: .semgrep.yml
-      continue-on-error: true  
-        
-    - name: 📊 Afficher les résultats
-      run: |
-        echo "=== RÉSULTATS SAST ==="
-        echo "✅ Scan de sécurité terminé"
-        echo "📁 Règles utilisées: .semgrep.yml"
-        echo "🔍 Détection: console.log"
-        
-    # ---------- VOTRE ÉTAPE FINALE ----------
-    - name: 🎉 Félicitations
-      run: echo "Vous avez réussi votre premier workflow GitHub Actions avec SAST !"
+      - name: 📥 Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configurer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Installer les dépendances
+        run: npm ci
+
+      - name: 🔍 Linter ESLint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: 🧪 Exécuter les tests unitaires
+        run: npm test
+
+      - name: 📊 Générer le rapport de couverture
+        run: npm run coverage
+        continue-on-error: true
+
+      - name: 📤 Upload rapport de couverture
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # Job 2 : SAST avec Semgrep
+  sast:
+    name: 🔒 SAST - Semgrep
+    runs-on: ubuntu-latest   # ⚡ Remplacez par self-hosted si besoin
+    needs: test             # Dépend du job test
+    steps:
+      - name: 📥 Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Scan Semgrep
+        id: semgrep
+        uses: returntocorp/semgrep-action@v1
+        continue-on-error: true   # Ne bloque pas le pipeline
+        with:
+          config: .semgrep.yml
+          json: true
+          output: semgrep-results.json
+
+      - name: 📊 Afficher le résumé
+        run: |
+          echo "=== RÉSULTATS SAST ==="
+          echo "🔍 Scan terminé"
+          echo "📁 Fichier de règles : .semgrep.yml"
+          if [ -f semgrep-results.json ]; then
+            COUNT=$(jq '.results | length' semgrep-results.json)
+            echo "⚠️  $COUNT vulnérabilité(s) trouvée(s)"
+          else
+            echo "✅ Aucune vulnérabilité détectée"
+          fi
+
+      - name: 📤 Upload des résultats Semgrep
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+
+  # Job 3 : Conclusion (optionnel)
+  conclusion:
+    name: 🎉 Pipeline terminé
+    runs-on: ubuntu-latest
+    needs: [test, sast]
+    if: always()
+    steps:
+      - run: echo "✅ CI + SAST exécuté avec succès !"
