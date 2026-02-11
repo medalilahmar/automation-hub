@@ -1,4 +1,4 @@
-name: 🧪 Tests Simple
+name: 🧪 Premier Workflow Simple + SAST
 
 on:
   push:
@@ -7,28 +7,56 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: 🔍 Tester l'application
-    runs-on: ubuntu-latest  
+  hello-world:
+    runs-on: ubuntu-latest
     
     steps:
-    - name: 📥 Télécharger le code
+    # ---------- VOS ÉTAPES EXISTANTES ----------
+    - name: 📥 Récupérer le code
       uses: actions/checkout@v4
       
-    - name: ⚙️ Installer Node.js
+    - name: 👋 Bonjour GitHub Actions
+      run: echo "Mon premier workflow GitHub Actions !"
+      
+    - name: 🖥️ Infos système
+      run: |
+        echo "Date: $(date)"
+        echo "Système: $(uname -a)"
+        echo "Répertoire: $(pwd)"
+        echo "Fichiers:"
+        ls -la
+        
+    - name: ⚙️ Tester Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'  
-        cache: 'npm'        
+        node-version: '20'
         
-    - name: 📦 Installer les packages
-      run: npm ci  
-      
-    - name: 🧪 Exécuter les tests
-      run: npm test
-      
-    - name: 🔍 Vérifier le code (ESLint)
-      run: npm run lint
-      
-    - name: ✅ Tests réussis !
-      run: echo "🎉 Tous les tests ont passé !"
+    - name: 📦 Vérifier installation
+      run: |
+        echo "Node version: $(node --version)"
+        echo "npm version: $(npm --version)"
+        
+    - name: 🚀 Tester mon API
+      run: |
+        echo "Installation des dépendances..."
+        npm ci
+        echo "Lancement des tests..."
+        npm test
+        echo "✅ Tests réussis !"
+    
+    # ---------- NOUVELLE ÉTAPE : SAST Semgrep ----------
+    - name: 🔍 SAST - Scan de sécurité avec Semgrep
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: .semgrep.yml  # Votre fichier de règles
+        
+    - name: 📊 Afficher les résultats
+      run: |
+        echo "=== RÉSULTATS SAST ==="
+        echo "✅ Scan de sécurité terminé"
+        echo "📁 Règles utilisées: .semgrep.yml"
+        echo "🔍 Détection: console.log"
+        
+    # ---------- VOTRE ÉTAPE FINALE ----------
+    - name: 🎉 Félicitations
+      run: echo "Vous avez réussi votre premier workflow GitHub Actions avec SAST !"

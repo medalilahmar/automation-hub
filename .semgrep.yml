@@ -1,0 +1,8 @@
+rules:
+  - id: no-console-log
+    pattern: console.log(...)
+    message: "Évitez console.log en production"
+    languages:
+      - javascript
+      - typescript
+    severity: WARNING
