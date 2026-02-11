@@ -9,7 +9,7 @@ on:
 jobs:
   sast:
     name: 🔒 SAST + DefectDojo
-    runs-on: ubuntu-latest  # ⚡ CHANGEZ EN self-hosted POUR localhost
+    runs-on: self-hosted  # ⚡ CHANGEZ EN self-hosted POUR localhost
     
     steps:
     - name: 📥 Récupérer le code
@@ -39,7 +39,7 @@ jobs:
       env:
         # ⚠️ SI self-hosted : http://localhost:8080
         # ⚠️ SI ubuntu-latest : http://192.168.11.170:8080 (IP de votre VM)
-        DD_URL: http://192.168.11.170:8080  # À CHANGER selon votre config
+        DD_URL: http://localhost:8080  # À CHANGER selon votre config
         DD_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
         PRODUCT_ID: ${{ secrets.PRODUCT_ID }}
       run: |
