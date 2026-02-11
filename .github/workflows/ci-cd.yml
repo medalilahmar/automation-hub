@@ -1,15 +1,12 @@
-name: 🚀 DevSecOps Full Pipeline
+name: 🔒 SAST + DefectDojo (Self-Hosted)
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   sast:
-    name: 🔒 SAST + DefectDojo
-    runs-on: self-hosted  # ⚡ CHANGEZ EN self-hosted POUR localhost
+    runs-on: self-hosted
     
     steps:
     - name: 📥 Récupérer le code
@@ -22,11 +19,18 @@ jobs:
         config: .semgrep.yml
 
     - name: 📦 Installer Semgrep CLI
-      run: pip3 install --timeout 120 --retries 5 semgrep
+      run: |
+        pip3 install --timeout 120 --retries 5 semgrep
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+      continue-on-error: true
+
+    - name: 📦 Installer jq
+      run: |
+        sudo apt update
+        sudo apt install -y jq
 
     - name: 📊 Générer rapport JSON
       run: semgrep --config .semgrep.yml --json --output semgrep-results.json
-      continue-on-error: true
 
     - name: 📤 Upload artefacts
       uses: actions/upload-artifact@v4
@@ -34,24 +38,18 @@ jobs:
         name: semgrep-results
         path: semgrep-results.json
 
-    # ---------- 🚀 NOUVEAU : IMPORT DEFECTDOJO ----------
     - name: 📤 Importer dans DefectDojo
       env:
-        # ⚠️ SI self-hosted : http://localhost:8080
-        # ⚠️ SI ubuntu-latest : http://192.168.11.170:8080 (IP de votre VM)
-        DD_URL: http://localhost:8080  # À CHANGER selon votre config
+        DD_URL: http://localhost:8080
         DD_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
         PRODUCT_ID: ${{ secrets.PRODUCT_ID }}
       run: |
         echo "🔍 Vérification du fichier JSON..."
-        if [ ! -f semgrep-results.json ]; then
-          echo "❌ Fichier semgrep-results.json non trouvé !"
-          exit 1
-        fi
+        [ ! -f semgrep-results.json ] && exit 1
         
-        echo "📌 Création d'un engagement pour le commit ${{ github.sha }}..."
+        echo "📌 Création d'un engagement..."
         TODAY=$(date +%Y-%m-%d)
-        TOMORROW=$(date -d "+1 day" +%Y-%m-%d)
+        TOMORROW=$(date -d "+1 day" +%Y-%m-%d || date -v+1d +%Y-%m-%d)
         
         ENGAGEMENT_RESPONSE=$(curl -s -X POST "$DD_URL/api/v2/engagements/" \
           -H "Authorization: Token $DD_API_KEY" \
@@ -65,14 +63,20 @@ jobs:
             "commit_hash": "${{ github.sha }}",
             "branch_tag": "${{ github.ref_name }}",
             "build_id": "${{ github.run_id }}",
-            "build_server": "GitHub Actions"
+            "build_server": "GitHub Actions Self-Hosted"
           }')
         
-        ENGAGEMENT_ID=$(echo "$ENGAGEMENT_RESPONSE" | jq -r '.id')
+        ENGAGEMENT_ID=$(echo "$ENGAGEMENT_RESPONSE" | jq -r '.id // empty')
+        
+        if [ -z "$ENGAGEMENT_ID" ]; then
+          echo "❌ Erreur création engagement: $ENGAGEMENT_RESPONSE"
+          exit 1
+        fi
+        
         echo "✅ Engagement créé avec ID: $ENGAGEMENT_ID"
         
         echo "📤 Import des résultats Semgrep..."
-        curl -X POST "$DD_URL/api/v2/import-scan/" \
+        curl -s -X POST "$DD_URL/api/v2/import-scan/" \
           -H "Authorization: Token $DD_API_KEY" \
           -F "engagement=$ENGAGEMENT_ID" \
           -F "scan_type=Semgrep JSON Report" \
@@ -86,13 +90,12 @@ jobs:
         
         echo "✅ Scan importé avec succès dans DefectDojo !"
         
-        echo "🔒 Fermeture de l'engagement..."
         curl -s -X PATCH "$DD_URL/api/v2/engagements/$ENGAGEMENT_ID/" \
           -H "Authorization: Token $DD_API_KEY" \
           -H "Content-Type: application/json" \
           -d '{"status": "Completed"}' > /dev/null
         
-        echo "🎉 Import terminé avec succès !"
+        echo "🔒 Engagement fermé."
 
     - name: 🎉 Pipeline terminé
-      run: echo "✅ DevSecOps pipeline completed successfully!"
+      run: echo "✅ DevSecOps pipeline completed successfully on self-hosted runner!"
