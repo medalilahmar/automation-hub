@@ -1,8 +1,97 @@
+# .semgrep.yml - Regles SAST pour automation-hub
+# ATTENTION: 100% ASCII - Pas d'accents, pas de caracteres speciaux
+
 rules:
+  # ============================================
+  # REGLE 1 : NO CONSOLE.LOG
+  # ============================================
   - id: no-console-log
     pattern: console.log(...)
-    message: "Évitez console.log en production"
-    languages:
-      - javascript
-      - typescript
+    message: "Evitez console.log en production. Utilisez logger.info()"
+    languages: [javascript, typescript]
     severity: WARNING
+
+  # ============================================
+  # REGLE 2 : SQL INJECTION - TEMPLATE LITERALS
+  # ============================================
+  - id: sql-injection-template
+    pattern-either:
+      - pattern: "`...${$VAR}...`"
+    message: "SQL INJECTION - Utilisez des parametres ? au lieu de ${...}"
+    languages: [javascript]
+    severity: ERROR
+    paths:
+      exclude:
+        - "*.logger.js"
+        - "test-*.js"
+        - "server.js" 
+
+  # ============================================
+  # REGLE 3 : SQL INJECTION - LIKE PATTERN
+  # ============================================
+  - id: sql-injection-like
+    pattern: "`...LIKE '%${$VAR}%'...`"
+    message: "SQL INJECTION dans LIKE - Utilisez db.prepare('... LIKE ?').all(`%${var}%`)"
+    languages: [javascript]
+    severity: ERROR
+
+  # ============================================
+  # REGLE 4 : SQL INJECTION - ORDER BY
+  # ============================================
+  - id: sql-injection-orderby
+    pattern: "`...ORDER BY ${$VAR}...`"
+    message: "SQL INJECTION dans ORDER BY - Utilisez une whitelist"
+    languages: [javascript]
+    severity: ERROR
+
+  # ============================================
+  # REGLE 5 : SQL INJECTION - LIMIT
+  # ============================================
+  - id: sql-injection-limit
+    pattern: "`...LIMIT ${$VAR}`"
+    message: "SQL INJECTION dans LIMIT - Utilisez db.prepare('... LIMIT ?').get(limit)"
+    languages: [javascript]
+    severity: ERROR
+
+  # ============================================
+  # REGLE 6 : PATH TRAVERSAL
+  # ============================================
+  - id: path-traversal
+    patterns:
+      - pattern-either:
+          - pattern: |
+              fs.readFileSync(... + $VAR)
+          - pattern: |
+              fs.readFile(... + $VAR)
+          - pattern: |
+              path.join(..., $VAR)
+    message: "PATH TRAVERSAL - Utilisez path.basename()"
+    languages: [javascript]
+    severity: WARNING
+
+
+      # ============================================
+  # REGLE XSS - REFLECHI (ESSENTIEL)
+  # ============================================
+  - id: xss-reflected-basic
+    patterns:
+      - pattern: |
+          res.send(`...${$VAR}...`)
+      - pattern-not: |
+          res.send(`...${escapeHtml($VAR)}...`)
+    message: "XSS REFLECHI - Echappez les variables avec escapeHtml()"
+    languages: [javascript]
+    severity: ERROR
+
+  # ============================================
+  # REGLE XSS - STOCKE (ESSENTIEL)
+  # ============================================
+  - id: xss-stored-basic
+    patterns:
+      - pattern: |
+          $DB.prepare(...).run(..., $CONTENT)
+      - pattern: |
+          res.send(`...${$ROW.$COL}...`)
+    message: "XSS STOCKE - Nettoyez les entrees et echappez les sorties"
+    languages: [javascript]
+    severity: ERROR

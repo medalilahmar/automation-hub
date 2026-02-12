@@ -29,6 +29,13 @@ app.get('/health', (req, res) => {
 // ICI : Assurez-vous d'UTILISER calculatorRoutes
 app.use('/api/calculator', calculatorRoutes);
 
+const historyRoutes = require('./routes/history');
+app.use('/history', historyRoutes);
+
+
+const commentsRoutes = require('./routes/comments');
+app.use('/comments', commentsRoutes);
+
 // 404
 app.use('*', (req, res) => {
   res.status(404).json({
@@ -47,4 +54,8 @@ app.use((err, req, res, next) => {
   });
 });
 
+
+
+
 module.exports = app;
+

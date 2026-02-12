@@ -20,7 +20,7 @@ class CalculatorController {
     }
 
     try {
-      const result = Calculator.calculate(operation, numA, numB);
+       const result = Calculator.calculate(operation, numA, numB);
       res.json({
         operation,
         a: numA,
