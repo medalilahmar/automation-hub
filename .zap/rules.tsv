@@ -1,0 +1,6 @@
+# Format: ID, Action, Raison
+10015	IGNORE	(Cookies sans SameSite - accepté pour notre API)
+10020	IGNORE	(X-Frame-Options manquant - pas de iframe)
+10021	IGNORE	(X-Content-Type-Options - pas critique)
+10038	IGNORE	(Content-Security-Policy - sera ajouté plus tard)
+10096	IGNORE	(Timestamp Disclosure - normal pour API)

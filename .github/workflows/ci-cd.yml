@@ -8,7 +8,7 @@ on:
 
 jobs:
   sast:
-    name: 🔍 SAST + SCA + DefectDojo
+    name: 🔍 SAST + SCA + DAST + DefectDojo
     runs-on: self-hosted
     
     steps:
@@ -19,27 +19,8 @@ jobs:
     - name: 📦 Installer les dépendances
       run: npm ci  
 
-    # ---------- SEMGREP (via action officielle) ----------
-    - name: 🔍 SAST avec Semgrep
-      uses: returntocorp/semgrep-action@v1
-      continue-on-error: true
-      with:
-        config: .semgrep.yml
 
-
-     # ---------- SCA avec Snyk ----------
-    - name: 📦 Snyk SCA
-      uses: snyk/actions/node@master
-      continue-on-error: true
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        args: >
-          --severity-threshold=low
-          --json-file-output=snyk-results.json
-          --org=813196ac-406b-4dfe-8cc3-1f640d42d4fe
-
-    # ---------- INSTALLATION JQ ULTRA-ROBUSTE ----------
+     # ---------- INSTALLATION JQ ULTRA-ROBUSTE ----------
     - name: 📦 Installer jq (sans blocage)
       run: |
         if command -v jq &> /dev/null; then
@@ -66,18 +47,189 @@ jobs:
           echo "✅ jq installé via binaire: $(jq --version)"
         fi
 
+
+    # ---------- SEMGREP (via action officielle) ----------
+    - name: 🔍 SAST avec Semgrep
+      uses: returntocorp/semgrep-action@v1
+      continue-on-error: true
+      with:
+        config: .semgrep.yml
+
+
+     # ---------- SCA avec Snyk ----------
+    - name: 📦 Snyk SCA
+      uses: snyk/actions/node@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: >
+          --severity-threshold=low
+          --json-file-output=snyk-results.json
+          --org=813196ac-406b-4dfe-8cc3-1f640d42d4fe
+
+
+
+   # ---------- 5. DÉMARRAGE DE L'API POUR LE DAST ----------
+    - name: 🚀 Démarrer l'API en arrière-plan
+      run: |
+        echo "🚀 Démarrage de l'API sur http://localhost:3000"
+        npm start &
+        # Sauvegarder le PID pour l'arrêt
+        echo $! > api.pid
+        # Attendre que l'API soit prête
+        sleep 15
+        
+        # Vérifier que l'API répond
+        for i in {1..10}; do
+          if curl -s -f http://localhost:3000/health > /dev/null; then
+            echo "✅ API démarrée avec succès"
+            exit 0
+          fi
+          echo "⏳ Tentative $i/10..."
+          sleep 3
+        done
+        echo "❌ API n'a pas démarré"
+        exit 1
+
+    # ---------- 6. DAST - SCAN OPENAPI (VERSION RÉCENTE) ----------
+    - name: 📋 DAST - Scan OpenAPI
+      run: |
+        echo "📋 Lancement du scan DAST OpenAPI..."
+        docker run --rm \
+          --network host \
+          -v $(pwd):/zap/wrk:rw \
+          ghcr.io/zaproxy/zaproxy:stable \
+          zap-api-scan.py \
+          -t http://localhost:3000 \
+          -f openapi \
+          -d openapi.yaml \
+          -J zap-openapi.json \
+          -T 120 || true
+      continue-on-error: true
+
+    - name: 💾 Vérifier rapport OpenAPI
+      run: |
+        if [ -f zap-openapi.json ] && [ -s zap-openapi.json ]; then
+          echo "✅ Rapport OpenAPI généré avec succès"
+          echo "📊 Aperçu des résultats :"
+          jq '.[0:3] | .[] | {alert: .alert, risk: .risk, url: .url}' zap-openapi.json 2>/dev/null || true
+        else
+          echo "⚠️ Pas de rapport OpenAPI ou fichier vide, création d'un fichier vide"
+          echo "[]" > zap-openapi.json
+        fi
+
+    # ---------- 7. DAST - SPIDER SCAN ----------
+    - name: 🕷️ DAST - Spider Scan
+      uses: zaproxy/action-baseline@v0.12.0
+      continue-on-error: true
+      with:
+        target: 'http://localhost:3000'
+        cmd_options: '-j'
+        allow_issue_writing: false
+
+    - name: 💾 Sauvegarder rapport Spider
+      run: |
+        if [ -f report_json.json ]; then
+          cp report_json.json zap-spider.json
+          echo "✅ Rapport Spider sauvegardé"
+        elif [ -f zap-out.json ]; then
+          cp zap-out.json zap-spider.json
+          echo "✅ Rapport Spider sauvegardé (zap-out.json)"
+        else
+          echo "⚠️ Aucun rapport Spider trouvé"
+        fi
+
+    # ---------- 8. DAST - ACTIVE SCAN ----------
+    - name: ⚔️ DAST - Active Scan
+      uses: zaproxy/action-full-scan@v0.12.0
+      continue-on-error: true
+      with:
+        target: 'http://localhost:3000'
+        cmd_options: '-a -j -T 180'
+        rules_file_name: '.zap/rules.tsv'
+        allow_issue_writing: false
+
+    - name: 💾 Sauvegarder rapport Active Scan
+      run: |
+        if [ -f report_json.json ]; then
+          cp report_json.json zap-active.json
+          echo "✅ Rapport Active Scan sauvegardé"
+        elif [ -f zap-out.json ]; then
+          cp zap-out.json zap-active.json
+          echo "✅ Rapport Active Scan sauvegardé (zap-out.json)"
+        else
+          echo "⚠️ Aucun rapport Active Scan trouvé"
+        fi
+
+    # ---------- 9. CONSOLIDATION DES RAPPORTS DAST ----------
+    - name: 🔀 Consolider les rapports DAST
+      run: |
+        echo "🔀 Consolidation des rapports DAST..."
+        
+        # Créer un tableau vide si aucun fichier n'existe
+        echo "[]" > zap-consolidated.json
+        
+        # Fusionner tous les rapports JSON disponibles
+        if ls zap-*.json 1> /dev/null 2>&1; then
+          jq -s 'add' zap-*.json > zap-consolidated.json 2>/dev/null || echo "[]" > zap-consolidated.json
+        fi
+        
+        # Compter les vulnérabilités
+        if [ -s zap-consolidated.json ]; then
+          TOTAL=$(jq 'length' zap-consolidated.json 2>/dev/null || echo "0")
+          CRITICAL=$(jq '[.[] | select(.riskcode=="3")] | length' zap-consolidated.json 2>/dev/null || echo "0")
+          HIGH=$(jq '[.[] | select(.riskcode=="2")] | length' zap-consolidated.json 2>/dev/null || echo "0")
+          MEDIUM=$(jq '[.[] | select(.riskcode=="1")] | length' zap-consolidated.json 2>/dev/null || echo "0")
+          LOW=$(jq '[.[] | select(.riskcode=="0")] | length' zap-consolidated.json 2>/dev/null || echo "0")
+          
+          echo "📊 RÉSULTATS DAST:"
+          echo "   Total: $TOTAL vulnérabilités"
+          echo "   🔴 Critiques: $CRITICAL"
+          echo "   🟠 Hautes: $HIGH"
+          echo "   🟡 Moyennes: $MEDIUM"
+          echo "   🟢 Basses: $LOW"
+        else
+          echo "⚠️ Aucune vulnérabilité détectée ou fichier vide"
+        fi
+
+
+    
+
     # ---------- GÉNÉRATION RAPPORT JSON ----------
     - name: 📊 Générer rapport JSON
       run: semgrep --config .semgrep.yml --json --output semgrep-results.json || true
 
+
+
+
+      # ---------- ARRÊT DE L'API ----------
+    - name: 🛑 Arrêter l'API
+      if: always()
+      run: |
+        echo "🛑 Arrêt de l'API..."
+        if [ -f api.pid ]; then
+          PID=$(cat api.pid)
+          kill $PID 2>/dev/null || true
+          rm -f api.pid
+          echo "✅ API arrêtée (PID: $PID)"
+        fi
+        # Forcer l'arrêt de tous les processus Node.js liés à l'app
+        pkill -f "node.*app.js" || true
+        echo "✅ Nettoyage des processus terminé"
+
+
+        
+
     # ---------- UPLOAD ARTEFACTS ----------
-    - name: 📤 Upload rapport Semgrep
+    - name: 📤 Upload tous les rapports de sécurité
       uses: actions/upload-artifact@v4
       with:
-        name: security-reports
+        name: security-reports-${{ github.sha }}
         path: |
           semgrep-results.json
           snyk-results.json
+          zap-*.json
         
 
     # ---------- IMPORT DEFECTDOJO ----------
@@ -137,6 +289,19 @@ jobs:
           fi
         else
           echo "⚠️ Fichier snyk-results.json non trouvé"
+        fi
+
+
+        # 3️⃣ IMPORT ZAP
+        if [ -f zap-consolidated.json ] && [ -s zap-consolidated.json ]; then
+          echo "📤 Import ZAP..."
+          curl -s -X POST "$DD_URL/api/v2/import-scan/" \
+            -H "Authorization: Token $DD_API_KEY" \
+            -F "engagement=$ENGAGEMENT_ID" \
+            -F "scan_type=ZAP Scan" \
+            -F "file=@zap-consolidated.json" \
+            -F "close_old_findings=true"
+          echo "✅ ZAP importé"
         fi
 
     - name: 🎉 Pipeline terminé

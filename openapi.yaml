@@ -1,0 +1,58 @@
+openapi: 3.0.0
+info:
+  title: Automation Hub API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+
+paths:
+  # Route 1: Health check
+  /health:
+    get:
+      summary: Vérifier que l'API fonctionne
+      responses:
+        '200':
+          description: API en bonne santé
+
+  # Route 2: Liste des opérations
+  /api/calculator/operations:
+    get:
+      summary: Liste des opérations disponibles
+      responses:
+        '200':
+          description: OK
+
+  # Route 3: Calculatrice
+  /api/calculator/calculate:
+    post:
+      summary: Effectuer un calcul
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operation:
+                  type: string
+                a:
+                  type: number
+                b:
+                  type: number
+      responses:
+        '200':
+          description: Résultat
+
+  # Route 4: Test XSS (vulnérable volontairement)
+  /dast-test/xss:
+    get:
+      summary: Test XSS
+      parameters:
+        - name: input
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Page avec input
