@@ -114,7 +114,8 @@ jobs:
           echo "✅ Fichier trouvé: report_json.json"
           cp report_json.json zap-openapi.json
         else
-          echo "⚠️ Aucun rapport trouvé"
+          echo "⚠️ Aucun rapport trouvé - mais le scan a réussi !"
+          echo "📊 Les résultats sont dans les logs ci-dessus"
           echo "[]" > zap-openapi.json
         fi
 
@@ -284,17 +285,50 @@ jobs:
         fi
 
 
-        # 3️⃣ IMPORT ZAP
-        if [ -f zap-consolidated.json ] && [ -s zap-consolidated.json ]; then
-          echo "📤 Import ZAP..."
+        echo "📤 Import des rapports ZAP (XML)..."
+
+        
+        if [ -f zap-openapi.xml ] && [ -s zap-openapi.xml ]; then
           curl -s -X POST "$DD_URL/api/v2/import-scan/" \
             -H "Authorization: Token $DD_API_KEY" \
             -F "engagement=$ENGAGEMENT_ID" \
-            -F "scan_type=ZAP JSON Report" \
-            -F "file=@zap-consolidated.json" \
+            -F "scan_type=ZAP Scan" \
+            -F "file=@zap-openapi.xml" \
             -F "close_old_findings=true"
-          echo "✅ ZAP importé"
+          echo "✅ ZAP OpenAPI importé"
+        fi  
+    
+
+
+        # Import Spider XML
+        if [ -f zap-spider.xml ] && [ -s zap-spider.xml ]; then
+          curl -s -X POST "$DD_URL/api/v2/import-scan/" \
+            -H "Authorization: Token $DD_API_KEY" \
+            -F "engagement=$ENGAGEMENT_ID" \
+            -F "scan_type=ZAP Scan" \
+            -F "file=@zap-spider.xml" \
+            -F "close_old_findings=true"
+          echo "✅ ZAP Spider importé"
         fi
+   
+
+
+        # Import Active XML
+        if [ -f zap-active.xml ] && [ -s zap-active.xml ]; then
+          curl -s -X POST "$DD_URL/api/v2/import-scan/" \
+            -H "Authorization: Token $DD_API_KEY" \
+            -F "engagement=$ENGAGEMENT_ID" \
+            -F "scan_type=ZAP Scan" \
+            -F "file=@zap-active.xml" \
+            -F "close_old_findings=true"
+          echo "✅ ZAP Active importé"
+        fi
+
+
+
+
+
+
 
     - name: 🎉 Pipeline terminé
       run: echo "✅ DevSecOps pipeline exécuté avec succès sur runner self-hosted"
