@@ -15,12 +15,10 @@ jobs:
     - name: 📥 Récupérer le code
       uses: actions/checkout@v4
 
-    # ---------- INSTALLATION DES DÉPENDANCES ----------
     - name: 📦 Installer les dépendances
       run: npm ci  
 
 
-     # ---------- INSTALLATION JQ ULTRA-ROBUSTE ----------
     - name: 📦 Installer jq (sans blocage)
       run: |
         if command -v jq &> /dev/null; then
@@ -48,7 +46,6 @@ jobs:
         fi
 
 
-    # ---------- SEMGREP (via action officielle) ----------
     - name: 🔍 SAST avec Semgrep
       uses: returntocorp/semgrep-action@v1
       continue-on-error: true
@@ -56,7 +53,6 @@ jobs:
         config: .semgrep.yml
 
 
-     # ---------- SCA avec Snyk ----------
     - name: 📦 Snyk SCA
       uses: snyk/actions/node@master
       continue-on-error: true
@@ -70,7 +66,6 @@ jobs:
 
 
 
-   # ---------- 5. DÉMARRAGE DE L'API POUR LE DAST ----------
     - name: 🚀 Démarrer l'API en arrière-plan
       run: |
         echo "🚀 Démarrage de l'API sur http://localhost:3000"
@@ -92,15 +87,19 @@ jobs:
         echo "❌ API n'a pas démarré"
         exit 1
 
-    # ---------- 6. DAST - SCAN OPENAPI (AVEC ACTION) ----------
     - name: 📋 DAST - Scan OpenAPI
-      uses: zaproxy/action-api-scan@v0.10.0
+      run: |
+        docker run --rm \
+        --network host \
+        -v $(pwd):/zap/wrk:rw \
+        ghcr.io/zaproxy/zaproxy:stable \
+        zap-api-scan.py \
+        -t http://localhost:3000 \
+        -f openapi \
+        -d openapi.yaml \
+        -J zap-openapi.json \
+        -T 120 || true
       continue-on-error: true
-      with:
-        target: 'openapi.yaml'
-        format: 'openapi'                
-        cmd_options: '-T 120 -j -J zap-openapi.json'
-        allow_issue_writing: false
 
     - name: 💾 Vérifier rapport OpenAPI
       run: |
@@ -113,7 +112,6 @@ jobs:
           echo "[]" > zap-openapi.json
         fi
 
-    # ---------- 7. DAST - SPIDER SCAN ----------
     - name: 🕷️ DAST - Spider Scan
       uses: zaproxy/action-baseline@v0.12.0
       continue-on-error: true
@@ -134,7 +132,6 @@ jobs:
           echo "⚠️ Aucun rapport Spider trouvé"
         fi
 
-    # ---------- 8. DAST - ACTIVE SCAN ----------
     - name: ⚔️ DAST - Active Scan
       uses: zaproxy/action-full-scan@v0.12.0
       continue-on-error: true
@@ -156,7 +153,6 @@ jobs:
           echo "⚠️ Aucun rapport Active Scan trouvé"
         fi
 
-    # ---------- 9. CONSOLIDATION DES RAPPORTS DAST ----------
     - name: 🔀 Consolider les rapports DAST
       run: |
         echo "🔀 Consolidation des rapports DAST..."
@@ -190,14 +186,12 @@ jobs:
 
     
 
-    # ---------- GÉNÉRATION RAPPORT JSON ----------
     - name: 📊 Générer rapport JSON
       run: semgrep --config .semgrep.yml --json --output semgrep-results.json || true
 
 
 
 
-      # ---------- ARRÊT DE L'API ----------
     - name: 🛑 Arrêter l'API
       if: always()
       run: |
@@ -215,7 +209,6 @@ jobs:
 
         
 
-    # ---------- UPLOAD ARTEFACTS ----------
     - name: 📤 Upload tous les rapports de sécurité
       uses: actions/upload-artifact@v4
       with:
@@ -226,7 +219,6 @@ jobs:
           zap-*.json
         
 
-    # ---------- IMPORT DEFECTDOJO ----------
     - name: 📤 Importer dans DefectDojo
       env:
         DD_URL: http://localhost:8080
