@@ -117,7 +117,7 @@ jobs:
       continue-on-error: true
       with:
         target: 'http://localhost:3000'
-        cmd_options: '-j'
+        cmd_options: '-j -T 300'
         allow_issue_writing: false
 
     - name: 💾 Sauvegarder rapport Spider
@@ -137,7 +137,7 @@ jobs:
       continue-on-error: true
       with:
         target: 'http://localhost:3000'
-        cmd_options: '-a -j -T 180'
+        cmd_options: '-a -j -T 60'
         rules_file_name: '.zap/rules.tsv'
         allow_issue_writing: false
 
