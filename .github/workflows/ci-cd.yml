@@ -8,12 +8,16 @@ on:
 
 jobs:
   sast:
-    name: 🔍 SAST + DefectDojo
+    name: 🔍 SAST + SCA + DefectDojo
     runs-on: self-hosted
     
     steps:
     - name: 📥 Récupérer le code
       uses: actions/checkout@v4
+
+    # ---------- INSTALLATION DES DÉPENDANCES ----------
+    - name: 📦 Installer les dépendances
+      run: npm ci  
 
     # ---------- SEMGREP (via action officielle) ----------
     - name: 🔍 SAST avec Semgrep
@@ -21,6 +25,19 @@ jobs:
       continue-on-error: true
       with:
         config: .semgrep.yml
+
+
+     # ---------- SCA avec Snyk ----------
+    - name: 📦 Snyk SCA
+      uses: snyk/actions/node@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: >
+          --severity-threshold=high
+          --json-file-output=snyk-results.json
+          --org=813196ac-406b-4dfe-8cc3-1f640d42d4fe
 
     # ---------- INSTALLATION JQ ULTRA-ROBUSTE ----------
     - name: 📦 Installer jq (sans blocage)
@@ -57,8 +74,11 @@ jobs:
     - name: 📤 Upload rapport Semgrep
       uses: actions/upload-artifact@v4
       with:
-        name: semgrep-results
-        path: semgrep-results.json
+        name: security-reports
+        path: |
+          semgrep-results.json
+          snyk-results.json
+        
 
     # ---------- IMPORT DEFECTDOJO ----------
     - name: 📤 Importer dans DefectDojo
@@ -67,29 +87,56 @@ jobs:
         DD_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
         PRODUCT_ID: ${{ secrets.PRODUCT_ID }}
       run: |
-        echo "🔍 Vérification du fichier JSON..."
-        [ ! -f semgrep-results.json ] && echo "❌ Fichier non trouvé" && exit 1
-        
-        echo "📌 Utilisation de l'engagement fixe #1 (pas besoin de jq pour ça)"
         ENGAGEMENT_ID=1
         
-        echo "📤 Import des résultats Semgrep (Engagement #$ENGAGEMENT_ID)..."
-        RESPONSE=$(curl -s -X POST "$DD_URL/api/v2/import-scan/" \
-          -H "Authorization: Token $DD_API_KEY" \
-          -F "engagement=$ENGAGEMENT_ID" \
-          -F "scan_type=Semgrep JSON Report" \
-          -F "file=@semgrep-results.json" \
-          -F "close_old_findings=true" \
-          -F "minimum_severity=Info" \
-          -F "environment=Development" \
-          -F "branch_tag=${{ github.ref_name }}" \
-          -F "commit_hash=${{ github.sha }}" \
-          -F "build_id=${{ github.run_id }}")
+        echo "🔍 Vérification des fichiers JSON..."
         
-        if echo "$RESPONSE" | grep -q "id"; then
-          echo "✅ Scan importé avec succès dans DefectDojo !"
+        # 1️⃣ IMPORT SEMGREP
+        if [ -f semgrep-results.json ]; then
+          echo "📤 Import Semgrep (Engagement #$ENGAGEMENT_ID)..."
+          SEMGREP_RESPONSE=$(curl -s -X POST "$DD_URL/api/v2/import-scan/" \
+            -H "Authorization: Token $DD_API_KEY" \
+            -F "engagement=$ENGAGEMENT_ID" \
+            -F "scan_type=Semgrep JSON Report" \
+            -F "file=@semgrep-results.json" \
+            -F "close_old_findings=true" \
+            -F "minimum_severity=Info" \
+            -F "environment=Development" \
+            -F "branch_tag=${{ github.ref_name }}" \
+            -F "commit_hash=${{ github.sha }}" \
+            -F "build_id=${{ github.run_id }}")
+          
+          if echo "$SEMGREP_RESPONSE" | grep -q "id"; then
+            echo "✅ Semgrep importé avec succès !"
+          else
+            echo "⚠️ Réponse Semgrep: $SEMGREP_RESPONSE"
+          fi
         else
-          echo "⚠️  Réponse: $RESPONSE"
+          echo "⚠️ Fichier semgrep-results.json non trouvé"
+        fi
+        
+        # 2️⃣ IMPORT SNYK
+        if [ -f snyk-results.json ]; then
+          echo "📤 Import Snyk (Engagement #$ENGAGEMENT_ID)..."
+          SNYK_RESPONSE=$(curl -s -X POST "$DD_URL/api/v2/import-scan/" \
+            -H "Authorization: Token $DD_API_KEY" \
+            -F "engagement=$ENGAGEMENT_ID" \
+            -F "scan_type=Snyk Scan" \
+            -F "file=@snyk-results.json" \
+            -F "close_old_findings=true" \
+            -F "minimum_severity=Info" \
+            -F "environment=Development" \
+            -F "branch_tag=${{ github.ref_name }}" \
+            -F "commit_hash=${{ github.sha }}" \
+            -F "build_id=${{ github.run_id }}")
+          
+          if echo "$SNYK_RESPONSE" | grep -q "id"; then
+            echo "✅ Snyk importé avec succès !"
+          else
+            echo "⚠️ Réponse Snyk: $SNYK_RESPONSE"
+          fi
+        else
+          echo "⚠️ Fichier snyk-results.json non trouvé"
         fi
 
     - name: 🎉 Pipeline terminé
