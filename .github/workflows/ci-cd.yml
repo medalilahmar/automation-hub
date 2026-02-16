@@ -97,18 +97,24 @@ jobs:
         -t http://localhost:3000 \
         -f openapi \
         -d openapi.yaml \
-        -J zap-openapi.json \
+        -x zap-openapi.xml \        # Format XML pour DefectDojo
+        -J zap-openapi.json \        # JSON pour vous (optionnel)
         -T 120 || true
       continue-on-error: true
 
     - name: 💾 Vérifier rapport OpenAPI
       run: |
-        if [ -f zap-openapi.json ] && [ -s zap-openapi.json ]; then
-          echo "✅ Rapport OpenAPI généré avec succès"
-          echo "📊 Aperçu des résultats :"
-          jq '.[0:3] | .[] | {alert: .alert, risk: .risk, url: .url}' zap-openapi.json 2>/dev/null || true
+        # Chercher tous les fichiers JSON possibles
+        if [ -f zap-openapi.json ]; then
+          echo "✅ Fichier trouvé: zap-openapi.json"
+        elif [ -f zap_out.json ]; then
+          echo "✅ Fichier trouvé: zap_out.json"
+          cp zap_out.json zap-openapi.json
+        elif [ -f report_json.json ]; then
+          echo "✅ Fichier trouvé: report_json.json"
+          cp report_json.json zap-openapi.json
         else
-          echo "⚠️ Pas de rapport OpenAPI ou fichier vide, création d'un fichier vide"
+          echo "⚠️ Aucun rapport trouvé"
           echo "[]" > zap-openapi.json
         fi
 
@@ -117,7 +123,7 @@ jobs:
       continue-on-error: true
       with:
         target: 'http://localhost:3000'
-        cmd_options: '-j -T 300'
+        cmd_options: '-x zap-spider.xml -j -T 300'
         allow_issue_writing: false
 
     - name: 💾 Sauvegarder rapport Spider
@@ -137,7 +143,7 @@ jobs:
       continue-on-error: true
       with:
         target: 'http://localhost:3000'
-        cmd_options: '-a -j -T 60'
+        cmd_options: '-x zap-active.xml -a -j -T 60'
         rules_file_name: '.zap/rules.tsv'
         allow_issue_writing: false
 
@@ -284,7 +290,7 @@ jobs:
           curl -s -X POST "$DD_URL/api/v2/import-scan/" \
             -H "Authorization: Token $DD_API_KEY" \
             -F "engagement=$ENGAGEMENT_ID" \
-            -F "scan_type=ZAP Scan" \
+            -F "scan_type=ZAP JSON Report" \
             -F "file=@zap-consolidated.json" \
             -F "close_old_findings=true"
           echo "✅ ZAP importé"
