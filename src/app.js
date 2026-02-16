@@ -36,6 +36,9 @@ app.use('/history', historyRoutes);
 const commentsRoutes = require('./routes/comments');
 app.use('/comments', commentsRoutes);
 
+const vulnerableRoutes = require('./routes/vulnerable');
+app.use('/vuln', vulnerableRoutes);
+
 // 404
 app.use('*', (req, res) => {
   res.status(404).json({

@@ -90,6 +90,8 @@ jobs:
     - name: 📋 DAST - Scan OpenAPI
       run: |
         docker run --rm \
+        --memory="2g" \
+        --cpus="2" \
         --network host \
         -v $(pwd):/zap/wrk:rw \
         ghcr.io/zaproxy/zaproxy:stable \
@@ -287,7 +289,7 @@ jobs:
 
         echo "📤 Import des rapports ZAP (XML)..."
 
-        
+
         if [ -f zap-openapi.xml ] && [ -s zap-openapi.xml ]; then
           curl -s -X POST "$DD_URL/api/v2/import-scan/" \
             -H "Authorization: Token $DD_API_KEY" \
