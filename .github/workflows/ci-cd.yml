@@ -92,21 +92,15 @@ jobs:
         echo "❌ API n'a pas démarré"
         exit 1
 
-    # ---------- 6. DAST - SCAN OPENAPI (VERSION RÉCENTE) ----------
+    # ---------- 6. DAST - SCAN OPENAPI (AVEC ACTION) ----------
     - name: 📋 DAST - Scan OpenAPI
-      run: |
-        echo "📋 Lancement du scan DAST OpenAPI..."
-        docker run --rm \
-          --network host \
-          -v $(pwd):/zap/wrk:rw \
-          ghcr.io/zaproxy/zaproxy:stable \
-          zap-api-scan.py \
-          -t http://localhost:3000 \
-          -f openapi \
-          -d openapi.yaml \
-          -J zap-openapi.json \
-          -T 120 || true
+      uses: zaproxy/action-api-scan@v0.10.0
       continue-on-error: true
+      with:
+        target: 'openapi.yaml'
+        format: 'openapi'                
+        cmd_options: '-T 120 -j -J zap-openapi.json'
+        allow_issue_writing: false
 
     - name: 💾 Vérifier rapport OpenAPI
       run: |
