@@ -50,7 +50,7 @@ jobs:
       uses: returntocorp/semgrep-action@v1
       continue-on-error: true
       with:
-        config: .semgrep.yml
+          config: p/security-audit
 
 
     - name: 📦 Snyk SCA

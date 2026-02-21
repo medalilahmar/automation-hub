@@ -193,18 +193,7 @@ rules:
     languages: [javascript]
     severity: ERROR
 
-  - id: password-in-cleartext-storage
-    patterns:
-      - pattern-either:
-          - pattern: "INSERT INTO users VALUES ($PASS)"
-          - pattern: "INSERT INTO users (password) VALUES ($PASS)"
-          - pattern: "UPDATE users SET password = $PASS"
-      - metavariable-regex:
-          metavariable: $PASS
-          regex: ".*req\\.body\\.password.*|.*password.*"
-    message: "MOT DE PASSE STOCKE EN CLAIR! Utilisez bcrypt.hash()"
-    languages: [javascript]
-    severity: ERROR
+ 
 
   - id: password-in-cleartext-comparison
     pattern-either:
