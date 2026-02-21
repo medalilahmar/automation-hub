@@ -2,12 +2,8 @@ const express = require('express');
 const db = require('../database/db');
 const router = express.Router();
 const escapeHtml = require('escape-html');
+const commentController = require('../controllers/commentController');
 
-// ==============================================
-// 🔴 PARTIE 1 : ROUTES VULNÉRABLES XSS
-// ==============================================
-
-// 🔴 XSS RÉFLÉCHI - Sans échappement
 router.get('/echo', (req, res) => {
     const msg = req.query.msg || 'Hello';
     
@@ -21,12 +17,10 @@ router.get('/echo', (req, res) => {
     `);
 });
 
-// 🔴 XSS STOCKÉ - Ajout sans nettoyage (VERSION CORRIGÉE)
 router.post('/comment', express.json(), (req, res) => {
     try {
         const { author, content } = req.body;
         
-        // ✅ NULL pour calculation_id (SANS commentaire dans la requête !)
         const stmt = db.prepare(`
             INSERT INTO comments (calculation_id, author, content)
             VALUES (NULL, ?, ?)
@@ -48,7 +42,6 @@ router.post('/comment', express.json(), (req, res) => {
     }
 });
 
-// 🔴 XSS STOCKÉ - Affichage sans échappement
 router.get('/comments', (req, res) => {
     try {
         const comments = db.prepare('SELECT * FROM comments ORDER BY created_at DESC').all();
@@ -70,11 +63,7 @@ router.get('/comments', (req, res) => {
     }
 });
 
-// ==============================================
-// ✅ PARTIE 2 : ROUTES SÉCURISÉES
-// ==============================================
 
-// ✅ XSS RÉFLÉCHI - Avec échappement
 router.get('/echo-safe', (req, res) => {
     const msg = req.query.msg || 'Hello';
     const safeMsg = escapeHtml(msg);
@@ -89,16 +78,13 @@ router.get('/echo-safe', (req, res) => {
     `);
 });
 
-// ✅ XSS STOCKÉ - Avec nettoyage (VERSION CORRIGÉE)
 router.post('/comment-safe', express.json(), (req, res) => {
     try {
         const { author, content } = req.body;
         
-        // ✅ Nettoyage XSS
         const cleanAuthor = escapeHtml(author || 'Anonymous');
         const cleanContent = escapeHtml(content || '');
         
-        // ✅ MÊME STRUCTURE QUE LA VERSION VULNÉRABLE !
         const stmt = db.prepare(`
             INSERT INTO comments (calculation_id, author, content)
             VALUES (NULL, ?, ?)
@@ -120,9 +106,7 @@ router.post('/comment-safe', express.json(), (req, res) => {
     }
 });
 
-// ==============================================
-// 🆕 ROUTE DE DIAGNOSTIC (OPTIONNELLE)
-// ==============================================
+
 router.get('/debug', (req, res) => {
     try {
         const tableInfo = db.prepare("PRAGMA table_info(comments)").all();
@@ -141,5 +125,14 @@ router.get('/debug', (req, res) => {
         });
     }
 });
+
+
+router.post('/', commentController.addComment);
+
+router.get('/user/:userId', commentController.getUserComments);
+
+router.get('/:id', commentController.getComment);
+
+router.get('/:id/render', commentController.renderComment);
 
 module.exports = router;

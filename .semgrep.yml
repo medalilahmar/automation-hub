@@ -1,97 +1,409 @@
-# .semgrep.yml - Regles SAST pour automation-hub
-# ATTENTION: 100% ASCII - Pas d'accents, pas de caracteres speciaux
-
 rules:
-  # ============================================
-  # REGLE 1 : NO CONSOLE.LOG
-  # ============================================
-  - id: no-console-log
-    pattern: console.log(...)
-    message: "Evitez console.log en production. Utilisez logger.info()"
+  - id: no-console-log-prod
+    patterns:
+      - pattern: console.log(...)
+      - pattern-not: console.log("...")
+      - pattern-not-inside: |
+          if (process.env.NODE_ENV === 'development') { ... }
+    message: "ERREUR: console.log detecte en production! Utilisez un logger approprie."
     languages: [javascript, typescript]
     severity: WARNING
-
-  # ============================================
-  # REGLE 2 : SQL INJECTION - TEMPLATE LITERALS
-  # ============================================
-  - id: sql-injection-template
-    pattern-either:
-      - pattern: "`...${$VAR}...`"
-    message: "SQL INJECTION - Utilisez des parametres ? au lieu de ${...}"
-    languages: [javascript]
-    severity: ERROR
     paths:
       exclude:
-        - "*.logger.js"
-        - "test-*.js"
-        - "server.js" 
+        - "tests/**"
+        - "**/*.test.js"
+        - "**/*.spec.js"
 
-  # ============================================
-  # REGLE 3 : SQL INJECTION - LIKE PATTERN
-  # ============================================
-  - id: sql-injection-like
-    pattern: "`...LIKE '%${$VAR}%'...`"
-    message: "SQL INJECTION dans LIKE - Utilisez db.prepare('... LIKE ?').all(`%${var}%`)"
-    languages: [javascript]
-    severity: ERROR
+  - id: no-console-error-prod
+    patterns:
+      - pattern: console.error(...)
+      - pattern-not: console.error("...")
+      - pattern-not-inside: |
+          if (process.env.NODE_ENV === 'development') { ... }
+    message: "ERREUR: console.error detecte! Utilisez un logger structure."
+    languages: [javascript, typescript]
+    severity: WARNING
+    paths:
+      exclude:
+        - "tests/**"
+        - "**/*.test.js"
 
-  # ============================================
-  # REGLE 4 : SQL INJECTION - ORDER BY
-  # ============================================
-  - id: sql-injection-orderby
-    pattern: "`...ORDER BY ${$VAR}...`"
-    message: "SQL INJECTION dans ORDER BY - Utilisez une whitelist"
-    languages: [javascript]
-    severity: ERROR
-
-  # ============================================
-  # REGLE 5 : SQL INJECTION - LIMIT
-  # ============================================
-  - id: sql-injection-limit
-    pattern: "`...LIMIT ${$VAR}`"
-    message: "SQL INJECTION dans LIMIT - Utilisez db.prepare('... LIMIT ?').get(limit)"
-    languages: [javascript]
-    severity: ERROR
-
-  # ============================================
-  # REGLE 6 : PATH TRAVERSAL
-  # ============================================
-  - id: path-traversal
+  - id: sql-injection-direct-db
     patterns:
       - pattern-either:
-          - pattern: |
-              fs.readFileSync(... + $VAR)
-          - pattern: |
-              fs.readFile(... + $VAR)
-          - pattern: |
-              path.join(..., $VAR)
-    message: "PATH TRAVERSAL - Utilisez path.basename()"
+          - pattern: "db.prepare(`...${$VAR}...`)"
+          - pattern: "db.all(`...${$VAR}...`)"
+          - pattern: "db.get(`...${$VAR}...`)"
+          - pattern: "db.run(`...${$VAR}...`)"
+          - pattern: "db.exec(`...${$VAR}...`)"
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ".*req\\.body.*|.*req\\.query.*|.*req\\.params.*|.*user.*input.*"
+    message: "INJECTION SQL CRITIQUE! Utilisez des requetes preparees avec parametres."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: sql-injection-like
+    patterns:
+      - pattern: "db.prepare(`...LIKE '%${$VAR}%'...`)"
+      - pattern: "db.all(`...LIKE '%${$VAR}%'...`)"
+    message: "INJECTION SQL DANS LIKE! Utilisez des parametres."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: sql-injection-order-by
+    patterns:
+      - pattern: "db.prepare(`...ORDER BY ${$VAR}...`)"
+      - pattern: "db.all(`...ORDER BY ${$VAR}...`)"
+    message: "INJECTION SQL DANS ORDER BY! Utilisez une whitelist."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: sql-injection-limit
+    patterns:
+      - pattern: "db.prepare(`...LIMIT ${$VAR}`)"
+      - pattern: "db.all(`...LIMIT ${$VAR}`)"
+    message: "INJECTION SQL DANS LIMIT! Utilisez des parametres."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: sql-injection-insert
+    patterns:
+      - pattern: "db.prepare(`INSERT INTO ... VALUES (${...})`)"
+      - pattern: "db.run(`INSERT INTO ... VALUES (${...})`)"
+    message: "INJECTION SQL DANS INSERT! Utilisez des parametres."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: sql-injection-update
+    patterns:
+      - pattern: "db.prepare(`UPDATE ... SET ${...} WHERE ...`)"
+      - pattern: "db.run(`UPDATE ... SET ${...} WHERE ...`)"
+    message: "INJECTION SQL DANS UPDATE! Utilisez des parametres."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: sql-injection-concat-dangerous
+    patterns:
+      - pattern-either:
+          - pattern: "db.all('...' + $VAR + '...')"
+          - pattern: "db.all(\"...\" + $VAR + \"...\")"
+          - pattern: "db.get('...' + $VAR + '...')"
+          - pattern: "db.get(\"...\" + $VAR + \"...\")"
+    message: "INJECTION SQL PAR CONCATENATION! Utilisez des requetes preparees."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: sql-injection-all-forms
+    patterns:
+      - pattern-either:
+          - pattern: "db.prepare(`...${$VAR}...`)"
+          - pattern: "db.all(`...${$VAR}...`)"
+          - pattern: "db.get(`...${$VAR}...`)"
+          - pattern: "db.run(`...${$VAR}...`)"
+    message: "INJECTION SQL! Utilisez des requetes preparees."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: xss-reflected-html
+    patterns:
+      - pattern-either:
+          - pattern: "res.send(`...${$VAR}...`)"
+          - pattern: "res.send('...' + $VAR + '...')"
+          - pattern: "res.send(\"...\" + $VAR + \"...\")"
+          - pattern: "res.render(..., { ..., $VAR, ... })"
+      - pattern-not: "res.send(`...${escape($VAR)}...`)"
+      - pattern-not: "res.send(`...${encodeURIComponent($VAR)}...`)"
+      - pattern-not: "res.send(`...${sanitize($VAR)}...`)"
+    message: "XSS REFLECHI! Variables utilisateur envoyees sans echappement."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: xss-stored-db-to-html
+    patterns:
+      - pattern-either:
+          - pattern: "res.send(`...${$ROW.$COL}...`)"
+          - pattern: "res.send('...' + $ROW.$COL + '...')"
+      - pattern-not: "res.send(`...${escapeHtml($ROW.$COL)}...`)"
+    message: "XSS STOCKE! Donnees BDD affichees sans echappement."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: xss-inner-html-danger
+    pattern: "$ELEMENT.innerHTML = $VAR"
+    message: "XSS VIA INNERHTML! Utilisez textContent a la place."
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  - id: command-injection-exec
+    patterns:
+      - pattern-either:
+          - pattern: "exec(`...${$VAR}...`)"
+          - pattern: "exec('...' + $VAR + '...')"
+          - pattern: "exec(\"...\" + $VAR + \"...\")"
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ".*req\\.body.*|.*req\\.query.*|.*req\\.params.*"
+    message: "COMMAND INJECTION! N'utilisez pas exec avec entrees utilisateur."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: path-traversal-file-operations
+    patterns:
+      - pattern-either:
+          - pattern: "fs.readFile(`...${$VAR}...`, ...)"
+          - pattern: "fs.readFileSync(`...${$VAR}...`, ...)"
+          - pattern: "fs.createReadStream(`...${$VAR}...`)"
+          - pattern: "fs.writeFile(`...${$VAR}...`, ...)"
+          - pattern: "fs.writeFileSync(`...${$VAR}...`, ...)"
+          - pattern: "fs.unlink(`...${$VAR}...`, ...)"
+          - pattern: "fs.unlinkSync(`...${$VAR}...`)"
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ".*req\\.query.*|.*req\\.params.*|.*req\\.body.*"
+      - pattern-not: "fs.readFile(path.join(__dirname, 'uploads', path.basename($VAR)), ...)"
+    message: "PATH TRAVERSAL! Operations fichiers avec chemins non valides."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: path-traversal-file-access
+    patterns:
+      - pattern-either:
+          - pattern: "fs.readFile(`...${$VAR}...`)"
+          - pattern: "res.download(`...${$VAR}...`)"
+    message: "PATH TRAVERSAL! Validez les chemins avec path.basename()."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: jwt-hardcoded-secret-danger
+    patterns:
+      - pattern-either:
+          - pattern: "jwt.sign(..., '...', ...)"
+          - pattern: "jwt.verify(..., '...', ...)"
+          - pattern: "const JWT_SECRET = '...'"
+          - pattern: "const SECRET = '...'"
+          - pattern: "const secret = '...'"
+    message: "SECRET JWT EN CLAIR! Utilisez process.env.JWT_SECRET"
+    languages: [javascript]
+    severity: ERROR
+
+  - id: jwt-no-verify-danger
+    pattern: "jwt.decode(...)"
+    message: "JWT SANS VERIFICATION! jwt.decode() ne verifie pas la signature."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: password-in-cleartext-storage
+    patterns:
+      - pattern-either:
+          - pattern: "INSERT INTO users VALUES ($PASS)"
+          - pattern: "INSERT INTO users (password) VALUES ($PASS)"
+          - pattern: "UPDATE users SET password = $PASS"
+      - metavariable-regex:
+          metavariable: $PASS
+          regex: ".*req\\.body\\.password.*|.*password.*"
+    message: "MOT DE PASSE STOCKE EN CLAIR! Utilisez bcrypt.hash()"
+    languages: [javascript]
+    severity: ERROR
+
+  - id: password-in-cleartext-comparison
+    pattern-either:
+      - pattern: "if ($PASS === $DB_PASS) ..."
+      - pattern: "if ($DB_PASS === $PASS) ..."
+      - pattern: "$PASS == $DB_PASS"
+    message: "COMPARAISON DE MOTS DE PASSE EN CLAIR! Utilisez bcrypt.compare()"
+    languages: [javascript]
+    severity: ERROR
+
+  - id: idor-missing-authorization-check
+    patterns:
+      - pattern-either:
+          - pattern: "app.get('/users/:id', $MIDDLEWARE, (req, res) => { ... })"
+          - pattern: "app.put('/users/:id', $MIDDLEWARE, (req, res) => { ... })"
+          - pattern: "app.delete('/users/:id', $MIDDLEWARE, (req, res) => { ... })"
+      - pattern-not-inside: |
+          if (req.user.id === req.params.id) { ... }
+    message: "IDOR POTENTIEL! Verifiez que l'utilisateur a le droit."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: info-disclosure-stack-trace
+    pattern: "res.status($CODE).json({ ..., stack: $ERR.stack, ... })"
+    message: "EXPOSITION DE LA STACK TRACE! Ne renvoyez pas la stack au client."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: info-disclosure-env-vars
+    pattern: "res.json({ ..., env: process.env, ... })"
+    message: "EXPOSITION DES VARIABLES D'ENVIRONNEMENT! Contient des secrets."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: info-disclosure-debug-endpoint
+    pattern-either:
+      - pattern: "app.get('/debug', ...)"
+      - pattern: "app.get('/status', ...)"
+      - pattern: "app.get('/info', ...)"
+    message: "ENDPOINT DEBUG DANGEREUX! Protegez par authentification."
     languages: [javascript]
     severity: WARNING
 
+  - id: file-upload-no-validation
+    pattern: "multer({ dest: '...' })"
+    message: "UPLOAD NON SECURISE! Ajoutez fileFilter et limits."
+    languages: [javascript]
+    severity: WARNING
 
-      # ============================================
-  # REGLE XSS - REFLECHI (ESSENTIEL)
-  # ============================================
-  - id: xss-reflected-basic
+  - id: file-upload-no-mime-check
     patterns:
-      - pattern: |
-          res.send(`...${$VAR}...`)
-      - pattern-not: |
-          res.send(`...${escapeHtml($VAR)}...`)
-    message: "XSS REFLECHI - Echappez les variables avec escapeHtml()"
+      - pattern: "upload.single('file')"
+      - pattern-not-inside: |
+          if (!req.file.mimetype.startsWith('image/')) { ... }
+    message: "PAS DE VERIFICATION MIME! Verifiez le type de fichier."
+    languages: [javascript]
+    severity: WARNING
+
+  - id: no-rate-limiting-auth
+    patterns:
+      - pattern-either:
+          - pattern: "app.post('/auth/login', $HANDLER)"
+          - pattern: "app.post('/auth/register', $HANDLER)"
+      - pattern-not-inside: |
+          const rateLimit = require('express-rate-limit');
+          const limiter = rateLimit({ ... });
+          app.post('/auth/login', limiter, $HANDLER)
+    message: "RATE LIMITING MANQUANT! Ajoutez sur les routes d'auth."
+    languages: [javascript]
+    severity: WARNING
+
+  - id: missing-helmet-security
+    patterns:
+      - pattern: "const app = express()"
+      - pattern-not-inside: |
+          const helmet = require('helmet');
+          app.use(helmet());
+    message: "HELMET MANQUANT! Ajoutez helmet() pour les headers de securite."
+    languages: [javascript]
+    severity: WARNING
+
+  - id: cors-permissive-default
+    pattern: "app.use(cors())"
+    message: "CORS TROP PERMISSIF! Configurez les origines autorisees."
+    languages: [javascript]
+    severity: WARNING
+
+  - id: cors-wildcard
+    pattern: "cors({ origin: '*' })"
+    message: "CORS AVEC WILDCARD! Restreignez les origines."
+    languages: [javascript]
+    severity: WARNING
+
+  - id: logging-sensitive-data-body
+    patterns:
+      - pattern-either:
+          - pattern: "logger.info(..., req.body, ...)"
+          - pattern: "console.log(..., req.body, ...)"
+          - pattern: "logger.info(..., req.headers, ...)"
+          - pattern: "console.log(..., req.headers, ...)"
+    message: "LOG DE DONNEES SENSIBLES! Ne loggez pas req.body/headers."
     languages: [javascript]
     severity: ERROR
 
-  # ============================================
-  # REGLE XSS - STOCKE (ESSENTIEL)
-  # ============================================
-  - id: xss-stored-basic
-    patterns:
-      - pattern: |
-          $DB.prepare(...).run(..., $CONTENT)
-      - pattern: |
-          res.send(`...${$ROW.$COL}...`)
-    message: "XSS STOCKE - Nettoyez les entrees et echappez les sorties"
+  - id: weak-crypto-md5
+    pattern: "crypto.createHash('md5')"
+    message: "MD5 NON SECURISE! Utilisez SHA-256 ou bcrypt."
     languages: [javascript]
     severity: ERROR
+
+  - id: weak-crypto-sha1
+    pattern: "crypto.createHash('sha1')"
+    message: "SHA1 NON SECURISE! Utilisez SHA-256."
+    languages: [javascript]
+    severity: ERROR
+
+  - id: insecure-randomness
+    pattern: "Math.random()"
+    message: "Math.random() NON CRYPTOGRAPHIQUE! Utilisez crypto.randomBytes()"
+    languages: [javascript]
+    severity: WARNING
+
+  - id: missing-input-validation
+    patterns:
+      - pattern-either:
+          - pattern: "app.post($PATH, $HANDLER)"
+          - pattern: "app.put($PATH, $HANDLER)"
+          - pattern: "app.patch($PATH, $HANDLER)"
+      - pattern-not-inside: |
+          const { body, validationResult } = require('express-validator');
+          ...
+          app.$METHOD($PATH, [...], $HANDLER)
+    message: "PAS DE VALIDATION DES ENTREES! Utilisez express-validator."
+    languages: [javascript]
+    severity: WARNING
+
+  - id: dos-recursive-function
+    patterns:
+      - pattern: |
+          function $FUNC($PARAM) {
+            if ($COND) return ...;
+            return $FUNC(...);
+          }
+      - metavariable-regex:
+          metavariable: $PARAM
+          regex: ".*(n|num|count).*"
+    message: "FONCTION RECURSIVE SANS LIMITE! Peut causer un stack overflow."
+    languages: [javascript]
+    severity: WARNING
+
+  - id: dos-regex-catastrophic
+    pattern-either:
+      - pattern: "/^([a-zA-Z0-9_\\.\\-])+\\@(([a-zA-Z0-9\\-])+\\.)+([a-zA-Z0-9]{2,4})+$/"
+      - pattern: "/(a+)+$/"
+      - pattern: "/^(a|aa)+$/"
+    message: "REGEX CATASTROPHIQUE! Peut causer un ReDoS."
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  - id: vulnerable-express-version
+    patterns:
+      - pattern: '"express": "4.16.0"'
+    message: "VERSION VULNERABLE D'EXPRESS! Mettez a jour vers 4.18.2+"
+    languages: [json]
+    severity: ERROR
+    paths:
+      include:
+        - "package.json"
+
+  - id: vulnerable-jsonwebtoken-version
+    patterns:
+      - pattern: '"jsonwebtoken": "8.5.0"'
+    message: "VERSION VULNERABLE DE JSONWEBTOKEN! Mettez a jour vers 9.0.0+"
+    languages: [json]
+    severity: ERROR
+    paths:
+      include:
+        - "package.json"
+
+  - id: vulnerable-lodash-version
+    patterns:
+      - pattern: '"lodash": "4.17.4"'
+    message: "VERSION VULNERABLE DE LODASH! Mettez a jour vers 4.17.21+"
+    languages: [json]
+    severity: ERROR
+    paths:
+      include:
+        - "package.json"
+
+paths:
+  exclude:
+    - "node_modules"
+    - "coverage"
+    - "tests/**"
+    - "**/*.test.js"
+    - "**/*.spec.js"
+    - "*.min.js"
+    - "dist"
+    - "build"
+    - ".github"
+    - ".zap"
+    - "reports"

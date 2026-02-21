@@ -328,9 +328,5 @@ jobs:
 
 
 
-
-
-
-
     - name: 🎉 Pipeline terminé
       run: echo "✅ DevSecOps pipeline exécuté avec succès sur runner self-hosted"
