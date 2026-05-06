@@ -1,32 +1,33 @@
-name: 🔒 DevSecOps Pipeline - Zero VM Config
+name:  DevSecOps Pipeline - Zero VM Config
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+#  push:
+#    branches: [ main ]
+#  pull_request:
+#    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   sast:
-    name: 🔍 SAST + SCA + DAST + DefectDojo
+    name: SAST + SCA + DAST + DefectDojo
     runs-on: self-hosted
     
     steps:
-    - name: 📥 Récupérer le code
+    - name:  Récupérer le code
       uses: actions/checkout@v4
 
-    - name: 📦 Installer les dépendances
+    - name:  Installer les dépendances
       run: npm ci  
 
 
-    - name: 📦 Installer jq (sans blocage)
+    - name:  Installer jq (sans blocage)
       run: |
         if command -v jq &> /dev/null; then
-          echo "✅ jq déjà installé: $(jq --version)"
+          echo " jq déjà installé: $(jq --version)"
           exit 0
         fi
         
-        echo "🔧 Nettoyage des processus apt bloqués..."
+        echo " Nettoyage des processus apt bloqués..."
         sudo killall apt apt-get dpkg 2>/dev/null || true
         sudo rm -f /var/lib/dpkg/lock-frontend
         sudo rm -f /var/lib/dpkg/lock
@@ -34,26 +35,26 @@ jobs:
         sudo rm -f /var/lib/apt/lists/lock
         sudo dpkg --configure -a
         
-        echo "📦 Tentative d'installation via apt..."
+        echo " Tentative d'installation via apt..."
         if sudo apt update -qq && sudo apt install -y -qq jq; then
-          echo "✅ jq installé avec apt: $(jq --version)"
+          echo " jq installé avec apt: $(jq --version)"
         else
-          echo "⚠️  Échec apt, installation directe du binaire..."
+          echo "  Échec apt, installation directe du binaire..."
           wget -q -O jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux64
           chmod +x jq
           sudo mv jq /usr/local/bin/
-          echo "✅ jq installé via binaire: $(jq --version)"
+          echo " jq installé via binaire: $(jq --version)"
         fi
 
 
-    - name: 🔍 SAST avec Semgrep
+    - name:  SAST avec Semgrep
       uses: returntocorp/semgrep-action@v1
       continue-on-error: true
       with:
           config: p/security-audit
 
 
-    - name: 📦 Snyk SCA
+    - name:  Snyk SCA
       uses: snyk/actions/node@master
       continue-on-error: true
       env:
@@ -66,9 +67,9 @@ jobs:
 
 
 
-    - name: 🚀 Démarrer l'API en arrière-plan
+    - name:  Démarrer l'API en arrière-plan
       run: |
-        echo "🚀 Démarrage de l'API sur http://localhost:3000"
+        echo " Démarrage de l'API sur http://localhost:3000"
         npm start &
         # Sauvegarder le PID pour l'arrêt
         echo $! > api.pid
@@ -78,16 +79,16 @@ jobs:
         # Vérifier que l'API répond
         for i in {1..10}; do
           if curl -s -f http://localhost:3000/health > /dev/null; then
-            echo "✅ API démarrée avec succès"
+            echo " API démarrée avec succès"
             exit 0
           fi
-          echo "⏳ Tentative $i/10..."
+          echo " Tentative $i/10..."
           sleep 3
         done
-        echo "❌ API n'a pas démarré"
+        echo " API n'a pas démarré"
         exit 1
 
-    - name: 📋 DAST - Scan OpenAPI
+    - name:  DAST - Scan OpenAPI
       run: |
         docker run --rm \
         --memory="2g" \
@@ -104,24 +105,24 @@ jobs:
         -T 120 || true
       continue-on-error: true
 
-    - name: 💾 Vérifier rapport OpenAPI
+    - name:  Vérifier rapport OpenAPI
       run: |
         # Chercher tous les fichiers JSON possibles
         if [ -f zap-openapi.json ]; then
-          echo "✅ Fichier trouvé: zap-openapi.json"
+          echo " Fichier trouvé: zap-openapi.json"
         elif [ -f zap_out.json ]; then
-          echo "✅ Fichier trouvé: zap_out.json"
+          echo " Fichier trouvé: zap_out.json"
           cp zap_out.json zap-openapi.json
         elif [ -f report_json.json ]; then
-          echo "✅ Fichier trouvé: report_json.json"
+          echo " Fichier trouvé: report_json.json"
           cp report_json.json zap-openapi.json
         else
-          echo "⚠️ Aucun rapport trouvé - mais le scan a réussi !"
-          echo "📊 Les résultats sont dans les logs ci-dessus"
+          echo " Aucun rapport trouvé - mais le scan a réussi !"
+          echo " Les résultats sont dans les logs ci-dessus"
           echo "[]" > zap-openapi.json
         fi
 
-    - name: 🕷️ DAST - Spider Scan
+    - name:  DAST - Spider Scan
       uses: zaproxy/action-baseline@v0.12.0
       continue-on-error: true
       with:
@@ -129,19 +130,19 @@ jobs:
         cmd_options: '-x zap-spider.xml -j -T 300'
         allow_issue_writing: false
 
-    - name: 💾 Sauvegarder rapport Spider
+    - name:  Sauvegarder rapport Spider
       run: |
         if [ -f report_json.json ]; then
           cp report_json.json zap-spider.json
-          echo "✅ Rapport Spider sauvegardé"
+          echo " Rapport Spider sauvegardé"
         elif [ -f zap-out.json ]; then
           cp zap-out.json zap-spider.json
-          echo "✅ Rapport Spider sauvegardé (zap-out.json)"
+          echo " Rapport Spider sauvegardé (zap-out.json)"
         else
-          echo "⚠️ Aucun rapport Spider trouvé"
+          echo " Aucun rapport Spider trouvé"
         fi
 
-    - name: ⚔️ DAST - Active Scan
+    - name:  DAST - Active Scan
       uses: zaproxy/action-full-scan@v0.12.0
       continue-on-error: true
       with:
@@ -150,21 +151,21 @@ jobs:
         rules_file_name: '.zap/rules.tsv'
         allow_issue_writing: false
 
-    - name: 💾 Sauvegarder rapport Active Scan
+    - name:  Sauvegarder rapport Active Scan
       run: |
         if [ -f report_json.json ]; then
           cp report_json.json zap-active.json
-          echo "✅ Rapport Active Scan sauvegardé"
+          echo " Rapport Active Scan sauvegardé"
         elif [ -f zap-out.json ]; then
           cp zap-out.json zap-active.json
-          echo "✅ Rapport Active Scan sauvegardé (zap-out.json)"
+          echo " Rapport Active Scan sauvegardé (zap-out.json)"
         else
-          echo "⚠️ Aucun rapport Active Scan trouvé"
+          echo " Aucun rapport Active Scan trouvé"
         fi
 
-    - name: 🔀 Consolider les rapports DAST
+    - name:  Consolider les rapports DAST
       run: |
-        echo "🔀 Consolidation des rapports DAST..."
+        echo " Consolidation des rapports DAST..."
         
         # Créer un tableau vide si aucun fichier n'existe
         echo "[]" > zap-consolidated.json
@@ -201,24 +202,24 @@ jobs:
 
 
 
-    - name: 🛑 Arrêter l'API
+    - name:  Arrêter l'API
       if: always()
       run: |
-        echo "🛑 Arrêt de l'API..."
+        echo " Arrêt de l'API..."
         if [ -f api.pid ]; then
           PID=$(cat api.pid)
           kill $PID 2>/dev/null || true
           rm -f api.pid
-          echo "✅ API arrêtée (PID: $PID)"
+          echo " API arrêtée (PID: $PID)"
         fi
         # Forcer l'arrêt de tous les processus Node.js liés à l'app
         pkill -f "node.*app.js" || true
-        echo "✅ Nettoyage des processus terminé"
+        echo " Nettoyage des processus terminé"
 
 
         
 
-    - name: 📤 Upload tous les rapports de sécurité
+    - name:  Upload tous les rapports de sécurité
       uses: actions/upload-artifact@v4
       with:
         name: security-reports-${{ github.sha }}
@@ -228,7 +229,7 @@ jobs:
           zap-*.json
         
 
-    - name: 📤 Importer dans DefectDojo
+    - name:  Importer dans DefectDojo
       env:
         DD_URL: http://localhost:8080
         DD_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
@@ -236,7 +237,7 @@ jobs:
       run: |
         ENGAGEMENT_ID=1
         
-        echo "🔍 Vérification des fichiers JSON..."
+        echo " Vérification des fichiers JSON..."
         
         # 1️⃣ IMPORT SEMGREP
         if [ -f semgrep-results.json ]; then
@@ -328,5 +329,5 @@ jobs:
 
 
 
-    - name: 🎉 Pipeline terminé
-      run: echo "✅ DevSecOps pipeline exécuté avec succès sur runner self-hosted"
+    - name:  Pipeline terminé
+      run: echo " DevSecOps pipeline exécuté avec succès sur runner self-hosted"
