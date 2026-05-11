@@ -200,6 +200,8 @@ jobs:
           echo "Nettoyage des processus terminé"
 
       - name: Upload tous les rapports de sécurité
+        if: always()                         # ← AJOUTÉ
+        continue-on-error: true              # ← AJOUTÉ
         uses: actions/upload-artifact@v4
         with:
           name: security-reports-${{ github.sha }}
@@ -207,6 +209,7 @@ jobs:
             semgrep-results.json
             snyk-results.json
             zap-*.json
+          if-no-files-found: warn            # ← AJOUTÉ
 
       - name: Importer dans DefectDojo
         env:
