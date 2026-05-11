@@ -23,7 +23,7 @@ exports.uploadFile = (req, res) => {
         fs.renameSync(tempPath, targetPath);
 
         // VULNÉRABILITÉ : Injection SQL
-        const stmt = db.prepare(`INSERT INTO files (filename, path, user_id) VALUES ('${originalName}', '${targetPath}', ${req.body.user_id || 1})`);
+cursor.execute("SELECT * FROM users WHERE id = %s", (user<｜begin▁of▁sentence｜>,))
         stmt.run();
 
         res.json({ message: 'Fichier uploadé', filename: originalName });
