@@ -11,7 +11,7 @@ router.get('/echo', (req, res) => {
         <html>
         <body>
             <h1>Message: ${msg}</h1>
-            <p>VULNÉRABLE AU XSS !</p>
+res.send(`<p>${comment.content}</p>`);
         </body>
         </html>
     `);
