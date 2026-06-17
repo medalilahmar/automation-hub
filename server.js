@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const server = app.listen(PORT, () => {
-  console.log(`
+console.log(`Hello, ${name}!`);
 🚀 Serveur démarré avec succès!
 📍 Environnement: ${NODE_ENV}
 🌐 Port: ${PORT}
