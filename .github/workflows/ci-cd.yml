@@ -1,10 +1,10 @@
 name: DevSecOps Pipeline - Zero VM Config
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  #push:
+  #  branches: [ main ]
+  #pull_request:
+  #  branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -164,14 +164,14 @@ jobs:
             HIGH=$(jq '[.[] | select(.riskcode=="2")] | length' zap-consolidated.json 2>/dev/null || echo "0")
             MEDIUM=$(jq '[.[] | select(.riskcode=="1")] | length' zap-consolidated.json 2>/dev/null || echo "0")
             LOW=$(jq '[.[] | select(.riskcode=="0")] | length' zap-consolidated.json 2>/dev/null || echo "0")
-            echo "📊 RÉSULTATS DAST:"
+            echo " RÉSULTATS DAST:"
             echo "   Total: $TOTAL vulnérabilités"
-            echo "   🔴 Critiques: $CRITICAL"
-            echo "   🟠 Hautes: $HIGH"
-            echo "   🟡 Moyennes: $MEDIUM"
-            echo "   🟢 Basses: $LOW"
+            echo "    Critiques: $CRITICAL"
+            echo "    Hautes: $HIGH"
+            echo "    Moyennes: $MEDIUM"
+            echo "    Basses: $LOW"
           else
-            echo "⚠️ Aucune vulnérabilité détectée ou fichier vide"
+            echo " Aucune vulnérabilité détectée ou fichier vide"
           fi
 
       - name: Générer rapport JSON
@@ -211,7 +211,7 @@ jobs:
             zap-*.json
           if-no-files-found: warn
 
-      # ✅ CORRECTION : Patch de l'engagement avec source_code_management_uri
+      #  CORRECTION : Patch de l'engagement avec source_code_management_uri
       # pour que l'autofix puisse résoudre repo_url si absent au niveau du finding
       - name: Patcher l'engagement DefectDojo avec repo_url
         env:
@@ -229,9 +229,9 @@ jobs:
             -d "{\"source_code_management_uri\": \"$REPO_URL\"}")
 
           if [ "$PATCH_RESPONSE" = "200" ]; then
-            echo "✅ Engagement patché avec succès (source_code_management_uri = $REPO_URL)"
+            echo " Engagement patché avec succès (source_code_management_uri = $REPO_URL)"
           else
-            echo "⚠️ Échec du patch de l'engagement (HTTP $PATCH_RESPONSE) — l'autofix utilisera repo_url des findings si disponible"
+            echo " Échec du patch de l'engagement (HTTP $PATCH_RESPONSE) — l'autofix utilisera repo_url des findings si disponible"
           fi
 
       - name: Importer dans DefectDojo
@@ -247,9 +247,9 @@ jobs:
 
           echo "Vérification des fichiers JSON..."
 
-          # 1️⃣ IMPORT SEMGREP (avec autofix)
+          #  IMPORT SEMGREP (avec autofix)
           if [ -f semgrep-results.json ]; then
-            echo "📤 Import Semgrep (Engagement #$ENGAGEMENT_ID)..."
+            echo " Import Semgrep (Engagement #$ENGAGEMENT_ID)..."
             SEMGREP_RESPONSE=$(curl -s -X POST "$DD_URL/api/v2/import-scan/" \
               -H "Authorization: Token $DD_API_KEY" \
               -F "engagement=$ENGAGEMENT_ID" \
@@ -266,17 +266,17 @@ jobs:
               -F "commit_hash=${{ github.sha }}" \
               -F "build_id=${{ github.run_id }}")
             if echo "$SEMGREP_RESPONSE" | grep -q "id"; then
-              echo "✅ Semgrep importé avec succès !"
+              echo " Semgrep importé avec succès !"
             else
-              echo "⚠️ Réponse Semgrep: $SEMGREP_RESPONSE"
+              echo " Réponse Semgrep: $SEMGREP_RESPONSE"
             fi
           else
-            echo "⚠️ Fichier semgrep-results.json non trouvé"
+            echo " Fichier semgrep-results.json non trouvé"
           fi
 
-          # 2️⃣ IMPORT SNYK (avec autofix)
+          #  IMPORT SNYK (avec autofix)
           if [ -f snyk-results.json ]; then
-            echo "📤 Import Snyk (Engagement #$ENGAGEMENT_ID)..."
+            echo  Import Snyk (Engagement #$ENGAGEMENT_ID)..."
             SNYK_RESPONSE=$(curl -s -X POST "$DD_URL/api/v2/import-scan/" \
               -H "Authorization: Token $DD_API_KEY" \
               -F "engagement=$ENGAGEMENT_ID" \
@@ -293,16 +293,16 @@ jobs:
               -F "commit_hash=${{ github.sha }}" \
               -F "build_id=${{ github.run_id }}")
             if echo "$SNYK_RESPONSE" | grep -q "id"; then
-              echo "✅ Snyk importé avec succès !"
+              echo " Snyk importé avec succès !"
             else
-              echo "⚠️ Réponse Snyk: $SNYK_RESPONSE"
+              echo " Réponse Snyk: $SNYK_RESPONSE"
             fi
           else
-            echo "⚠️ Fichier snyk-results.json non trouvé"
+            echo " Fichier snyk-results.json non trouvé"
           fi
 
-          # 3️⃣ IMPORTS ZAP (sans static_finding, car dynamiques)
-          echo "📤 Import des rapports ZAP (XML)..."
+          #  IMPORTS ZAP (sans static_finding, car dynamiques)
+          echo " Import des rapports ZAP (XML)..."
           if [ -f zap-openapi.xml ] && [ -s zap-openapi.xml ]; then
             curl -s -X POST "$DD_URL/api/v2/import-scan/" \
               -H "Authorization: Token $DD_API_KEY" \
@@ -310,7 +310,7 @@ jobs:
               -F "scan_type=ZAP Scan" \
               -F "file=@zap-openapi.xml" \
               -F "close_old_findings=true"
-            echo "✅ ZAP OpenAPI importé"
+            echo " ZAP OpenAPI importé"
           fi
 
           if [ -f zap-spider.xml ] && [ -s zap-spider.xml ]; then
@@ -320,7 +320,7 @@ jobs:
               -F "scan_type=ZAP Scan" \
               -F "file=@zap-spider.xml" \
               -F "close_old_findings=true"
-            echo "✅ ZAP Spider importé"
+            echo " ZAP Spider importé"
           fi
 
           if [ -f zap-active.xml ] && [ -s zap-active.xml ]; then
@@ -330,7 +330,7 @@ jobs:
               -F "scan_type=ZAP Scan" \
               -F "file=@zap-active.xml" \
               -F "close_old_findings=true"
-            echo "✅ ZAP Active importé"
+            echo " ZAP Active importé"
           fi
 
       - name: Pipeline terminé
