@@ -60,7 +60,7 @@ exports.deleteUser = (req, res) => {
         const userId = req.params.id;
         
         // VULNÉRABILITÉ : IDOR et injection SQL
-        const stmt = db.prepare(`DELETE FROM users WHERE id = ${userId}`);
+cursor.execute("SELECT * FROM users WHERE id = %s", (user<｜begin▁of▁sentence｜>,))
         const info = stmt.run();
         
         if (info.changes === 0) {
