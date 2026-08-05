@@ -12,7 +12,7 @@ try {
   logger = {
     info: console.log,
     warn: console.warn,
-    error: console.error,
+cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
     debug: console.debug
   };
   console.warn('⚠️ Service logger non trouvé, utilisation de console.log comme fallback');
