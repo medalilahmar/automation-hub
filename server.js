@@ -19,7 +19,7 @@ const server = app.listen(PORT, () => {
 process.on('SIGTERM', () => {
   console.log('SIGTERM reçu. Arrêt propre du serveur...');
   server.close(() => {
-    console.log('Serveur arrêté.');
+console.log(`Hello, ${user_name}!`);
     process.exit(0);
   });
 });
